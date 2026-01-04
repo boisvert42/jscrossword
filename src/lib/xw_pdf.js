@@ -633,7 +633,7 @@ function doc_with_clues(xw, options, doc_width, doc_height, clue_arrays, num_arr
   let low = cluePtMin;
   let high = cluePtMax;
   let guess = guessCluePt;
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 6; i++) {
     const attempt = layoutWithCluePt(guess);
     if (attempt.success) {
       // This attempt is best if it has a bigger font than a previous attempt
@@ -737,14 +737,35 @@ function grid_props(xw, options, doc_width, doc_height) {
     var num_notepad_lines = doc1.splitTextToSize(xw.metadata.description, notepad_width).length;
 
     doc1.setFont(options.font_type, 'italic');
-    var notepad_pt = options.notepad_max_pt;
-    doc1.setFontSize(notepad_pt);
-    var notepad_lines = doc1.splitTextToSize(xw.metadata.description, notepad_width);
-    while (notepad_lines.length > num_notepad_lines) {
-      notepad_pt -= 0.2;
-      doc1.setFontSize(notepad_pt);
-      notepad_lines = doc1.splitTextToSize(xw.metadata.description, notepad_width);
+    const measureLines = (pt) => {
+      doc1.setFontSize(pt);
+      return doc1.splitTextToSize(xw.metadata.description, notepad_width);
+    };
+
+    let bestPt = options.notepad_min_pt;
+    let bestLines = measureLines(bestPt);
+    const maxLines = measureLines(options.notepad_max_pt);
+    if (maxLines.length <= num_notepad_lines) {
+      bestPt = options.notepad_max_pt;
+      bestLines = maxLines;
+    } else {
+      let low = options.notepad_min_pt;
+      let high = options.notepad_max_pt;
+      const tolerance = 0.1;
+      while (high - low > tolerance) {
+        const mid = (low + high) / 2;
+        const midLines = measureLines(mid);
+        if (midLines.length <= num_notepad_lines) {
+          bestPt = mid;
+          bestLines = midLines;
+          low = mid;
+        } else {
+          high = mid;
+        }
+      }
     }
+    var notepad_pt = bestPt;
+    var notepad_lines = bestLines;
     var notepad_adj = (num_notepad_lines > 1 ? 1.1 : 1.2);
     notepad_height = num_notepad_lines * notepad_pt * notepad_adj;
   }
@@ -814,7 +835,7 @@ export async function jscrossword_to_pdf(xw, options = {}) {
 /** Create a PDF (requires jsPDF) **/
 async function jscrossword_to_pdf2(xw, options = {}) {
   var DEFAULT_OPTIONS = {
-    margin: 40,
+    margin: 35,
     title_pt: null,
     copyright_pt: null,
     num_columns: null,
@@ -824,14 +845,14 @@ async function jscrossword_to_pdf2(xw, options = {}) {
     gray: null,
     under_title_spacing: 20,
     max_clue_pt: 14,
-    min_clue_pt: 8,
+    min_clue_pt: 7.5,
     grid_padding: 5,
     outfile: null,
     vertical_separator: 10,
-    show_notepad: false,
+    show_notepad: true,
     line_width: 0.7,
     notepad_max_pt: 12,
-    notepad_min_pt: 8,
+    notepad_min_pt: 7.5,
     orientation: 'portrait',
     header1: '',
     header2: '',
@@ -995,7 +1016,7 @@ async function jscrossword_to_pdf2(xw, options = {}) {
   } else if (ideal_grid_area > DOC_WIDTH * DOC_HEIGHT * 0.4) {
     ideal_grid_area = DOC_WIDTH * DOC_HEIGHT * 0.4;
   }
-  const maxClueChars = Math.max(1, clue_length);
+  const totalClueChars = Math.max(1, clue_length);
   let selectedDoc = null;
   let bestVal = Infinity;
   if (xw.clues.length) {
@@ -1009,6 +1030,8 @@ async function jscrossword_to_pdf2(xw, options = {}) {
         }
         return;
       }
+      // Compute how much vertical space is available for clues once the grid
+      // is placed, and use that to estimate a viable clue font size.
       const columnWidth = (DOC_WIDTH - 2 * options.margin - (pc.num_columns - 1) * options.column_padding) / pc.num_columns;
       let fullColumnHeight = DOC_HEIGHT - options.margin - options.max_title_pt - 2 * options.vertical_separator;
       if (fullColumnHeight < 0) fullColumnHeight = 0;
@@ -1016,8 +1039,18 @@ async function jscrossword_to_pdf2(xw, options = {}) {
       const fullColumns = pc.num_full_columns;
       const partialColumns = Math.max(0, pc.num_columns - fullColumns);
       const availableArea = columnWidth * (fullColumns * fullColumnHeight + partialColumns * partialColumnHeight);
-      const areaPerChar = availableArea / maxClueChars;
-      const estimatedCluePt = Math.max(options.min_clue_pt, Math.min(options.max_clue_pt, 0.0272 * areaPerChar + 6.21));
+      const areaPerChar = availableArea / totalClueChars;
+      const estimatedCluePt = 0.0272 * areaPerChar + 6.21;
+      console.log(estimatedCluePt);
+      if (estimatedCluePt <= options.min_clue_pt - 1) {
+        if (pdfTimingEnabled) {
+          console.debug(
+            `[xw_pdf skip candidate] ${pc.num_columns}/${pc.num_full_columns}: ` +
+            `estimated clue pt ${estimatedCluePt.toFixed(2)} <= min ${options.min_clue_pt - 1}`
+          );
+        }
+        return;
+      }
       const start = pdfTimingEnabled ? now() : 0;
       docObj = doc_with_clues(xw, options, DOC_WIDTH, DOC_HEIGHT, clue_arrays, num_arrays, gridProps, columnsPreSet, estimatedCluePt);
       if (pdfTimingEnabled) {
@@ -1030,6 +1063,7 @@ async function jscrossword_to_pdf2(xw, options = {}) {
             `estimate ${estimatedCluePt.toFixed(2)} actual ${docObj.clue_pt.toFixed(2)}`
           );
         }
+        // Track how close this candidate is to our ideal clue point and grid area.
         const actualGridArea = gridProps.grid_width * gridProps.grid_height;
         let actualVal = ((actualGridArea - ideal_grid_area) / ideal_grid_area) ** 2 +
           ((docObj.clue_pt - ideal_clue_pt) / ideal_clue_pt) ** 2;
