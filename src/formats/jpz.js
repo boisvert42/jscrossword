@@ -43,6 +43,7 @@ export function xw_read_jpz(data) {
     description: md.querySelector("description")?.textContent.trim() || "",
     intro: puzzle.querySelector("instructions")?.textContent.trim() || "",
     fakeclues: !!md.querySelector("fakeclues"),
+    realwords: !!md.querySelector("realwords"),
     crossword_type,
   };
 

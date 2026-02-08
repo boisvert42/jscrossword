@@ -59,6 +59,7 @@ export function xw_read_ipuz(inputData) {
     width,
     crossword_type,
     fakeclues: data.fakeclues || false,
+    realwords: data.realwords || null,
     word_locations: Boolean(data.words),
     completion_message: data.explanation || null,
     // we add an image for vpuz support
@@ -274,6 +275,7 @@ export function xw_write_ipuz(metadata, cells, words, clues) {
 
   // add some additional stuff
   if (metadata.fakeclues) j.fakeclues = metadata.fakeclues;
+  if (metadata.realwords) j.realwords = metadata.realwords;
   if (metadata["puzzle-image"]) j["puzzle-image"] = metadata["puzzle-image"];
   if (metadata.explanation) j.explanation = metadata.explanation;
 
