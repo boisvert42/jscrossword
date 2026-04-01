@@ -3,6 +3,7 @@ import { xw_read_ipuz, xw_write_ipuz } from "./formats/ipuz.js";
 import { xw_read_jpz, xw_write_jpz } from "./formats/jpz.js";
 import { xw_read_puz } from "./formats/puz.js";
 import { xw_read_rg } from "./formats/rg.js";
+import { xw_read_xd } from "./formats/xd.js";
 import { jscrossword_to_pdf } from "./lib/xw_pdf.js";
 import { xwGrid } from "./grid.js";
 
@@ -154,12 +155,18 @@ export default class JSCrossword {
     return new JSCrossword(metadata, cells, words, clues);
   }
 
+  static readXD(data, options = {}) {
+    const { metadata, cells, words, clues } = xw_read_xd(data);
+    return new JSCrossword(metadata, cells, words, clues);
+  }
+
   static READERS = [
     JSCrossword.readPUZ,
     JSCrossword.readJPZ,
     JSCrossword.readIPUZ,
     JSCrossword.readCFP,
-    JSCrossword.readRG
+    JSCrossword.readRG,
+    JSCrossword.readXD
   ];
 
   /**
@@ -205,7 +212,7 @@ export default class JSCrossword {
         js.set_check_reveal();
         return js;
       } catch (err) {
-        //console.log(err);
+        console.log(err);
       }
     }
     throw new Error("Unknown puzzle format.");

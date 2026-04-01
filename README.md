@@ -219,6 +219,7 @@ Generates a `stats.html` file showing module sizes and dependency graphs.
 - Export functions (`xw_write_*`) are actively being expanded.
 - The PDF generator (`toPDF()`) uses **jsPDF**, **GraphemeSplitter**, and **Twemoji** for Unicode and emoji compatibility.
 - Rollup is used for bundling with optional minification and dependency visualization.
+- **Node.js Compatibility:** Some files use `import ... assert { type: "json" }`. If you are using Node.js 22+, you may need to update these to `with { type: "json" }` if running scripts directly with `node` (though Rollup handles both during the build process).
 
 ---
 
@@ -273,6 +274,10 @@ In iPUZ files, add a top-level `fakecluegroups` property containing an array of 
 While not part of the standard JPZ schema, **jscrossword** supports parsing acrostic puzzles from JPZ files using the `<acrostic>` element in place of `<crossword>`.
 
 ---
+
+## License
+
+MIT License © 2025 [Crossword Nexus](https://crosswordnexus.com)
 
 ## License
 
