@@ -291,16 +291,15 @@ function split_text_to_size_bi(
   const containsItalic = clue.toUpperCase().includes("<I");
   const containsEmoji = emojiRx.test(clean_clue) || Array.from(clean_clue).some(c => !!symbolImages[c]);
 
+  let lines;
+
   // --- Fast path: no markup, no emoji, no hyphens
   if (!containsBold && !containsItalic && !containsEmoji && !clean_clue.includes("-") ) {
-    let lines = doc.splitTextToSize(clean_clue, col_width);
-    if (has_header) lines = [header_line].concat(lines);
-    return lines;
+    lines = doc.splitTextToSize(clean_clue, col_width);
   }
-
   // --- Emoji only ---
-  if (!containsBold && !containsItalic && containsEmoji) {
-    let lines = doc.splitTextToSize(clean_clue, col_width).map(line =>
+  else if (!containsBold && !containsItalic && containsEmoji) {
+    lines = doc.splitTextToSize(clean_clue, col_width).map(line =>
       splitGraphemes(line).map(char => ({
         char,
         is_bold: false,
@@ -308,19 +307,16 @@ function split_text_to_size_bi(
         is_emoji: emojiRx.test(char) || !!symbolImages[char]
       }))
     );
-    if (has_header) lines = [header_line].concat(lines);
-    return lines;
   }
-
   // --- Formatting only (no emoji) ---
-  if ((containsBold || containsItalic) && !containsEmoji) {
+  else if ((containsBold || containsItalic) && !containsEmoji) {
     doc.setFont(font_type, "bold");
     const wrapped = doc.splitTextToSize(clean_clue, col_width);
     doc.setFont(font_type, "normal");
 
     let ctr = 0;
     const SPLIT_CHARS = new Set([" ", "\t", "\n", "-"]);
-    const lines = wrapped.map(line => {
+    lines = wrapped.map(line => {
       const thisLine = [];
       const graphemes = splitGraphemes(line);
       for (let i = 0; i < graphemes.length; i++) {
@@ -331,69 +327,69 @@ function split_text_to_size_bi(
       }
       return thisLine;
     });
-
-    if (has_header) return [header_line].concat(lines);
-    return lines;
   }
-
   // --- Mixed emoji + formatting ---
-  const measured_chunks = [];
-  const chunk_map = [];
+  else {
+    const measured_chunks = [];
+    const chunk_map = [];
 
-  for (let i = 0; i < split_clue.length;) {
-    const c = split_clue[i];
-    if (c.is_emoji) {
-      measured_chunks.push(c.char);
-      chunk_map.push([i]);
-      i++;
-    } else {
-      let acc = "";
-      const indices = [];
-      while (i < split_clue.length && !split_clue[i].is_emoji) {
-        acc += split_clue[i].char;
-        indices.push(i);
+    for (let i = 0; i < split_clue.length;) {
+      const c = split_clue[i];
+      if (c.is_emoji) {
+        measured_chunks.push(c.char);
+        chunk_map.push([i]);
         i++;
-      }
-      acc.split(/([\-\s]+)/).forEach(word => {
-        if (word) {
-          measured_chunks.push(word);
-          const wordGraphemeCount = splitGraphemes(word).length;
-          chunk_map.push(indices.splice(0, wordGraphemeCount));
+      } else {
+        let acc = "";
+        const indices = [];
+        while (i < split_clue.length && !split_clue[i].is_emoji) {
+          acc += split_clue[i].char;
+          indices.push(i);
+          i++;
         }
-      });
+        acc.split(/([\-\s]+)/).forEach(word => {
+          if (word) {
+            measured_chunks.push(word);
+            const wordGraphemeCount = splitGraphemes(word).length;
+            chunk_map.push(indices.splice(0, wordGraphemeCount));
+          }
+        });
+      }
     }
-  }
 
-  doc.setFont(font_type, "bold");
-  const wrapped_lines = [];
-  const wrapped_maps = [];
-  let currentLine = "";
-  let currentMap = [];
+    doc.setFont(font_type, "bold");
+    const wrapped_lines = [];
+    const wrapped_maps = [];
+    let currentLine = "";
+    let currentMap = [];
 
-  for (let j = 0; j < measured_chunks.length; j++) {
-    const chunk = measured_chunks[j];
-    const testLine = currentLine + chunk;
-    if (doc.getTextWidth(testLine) > col_width && currentLine !== "") {
+    for (let j = 0; j < measured_chunks.length; j++) {
+      const chunk = measured_chunks[j];
+      const testLine = currentLine + chunk;
+      if (doc.getTextWidth(testLine) > col_width && currentLine !== "") {
+        wrapped_lines.push(currentLine);
+        wrapped_maps.push(currentMap);
+        currentLine = chunk;
+        currentMap = chunk_map[j];
+      } else {
+        currentLine += chunk;
+        currentMap = currentMap.concat(chunk_map[j]);
+      }
+    }
+    if (currentLine) {
       wrapped_lines.push(currentLine);
       wrapped_maps.push(currentMap);
-      currentLine = chunk;
-      currentMap = chunk_map[j];
-    } else {
-      currentLine += chunk;
-      currentMap = currentMap.concat(chunk_map[j]);
     }
-  }
-  if (currentLine) {
-    wrapped_lines.push(currentLine);
-    wrapped_maps.push(currentMap);
-  }
-  doc.setFont(font_type, "normal");
+    doc.setFont(font_type, "normal");
 
-  let lines = wrapped_maps.map(map =>
-    map.map(i => split_clue[i]).filter(Boolean)
-  );
+    lines = wrapped_maps.map(map =>
+      map.map(i => split_clue[i]).filter(Boolean)
+    );
+  }
 
-  if (has_header) lines = [header_line].concat(lines);
+  if (has_header) {
+    lines = [header_line].concat(lines);
+  }
   return lines;
 }
 
