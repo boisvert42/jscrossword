@@ -1,6 +1,7 @@
 import jsPDF from "jspdf/dist/jspdf.es.min.js";
 import twemoji from "twemoji";
 import { DOMParserImpl } from "../lib/xmlparser.js";
+import { drawVectorSymbol, vectorSymbols } from "./vector_symbols.js";
 
 // tell if we're in browser or node
 const isBrowser = (typeof window !== "undefined" && typeof document !== "undefined");
@@ -121,7 +122,7 @@ function foldReplacing(str, fallback = '*') {
   };
 
   return Array.from(str).map(c => {
-    if (typeof emojiRx !== 'undefined' && emojiRx.test(c)) return c; // preserve emoji
+    if (!!vectorSymbols[c] || (typeof emojiRx !== 'undefined' && emojiRx.test(c))) return c; // preserve emoji and custom symbols
 
     // 1) Direct replacements first
     if (replacements[c]) return replacements[c];
@@ -218,7 +219,7 @@ function traverseTree(htmlDoc, agg = []) {
         char,
         is_bold,
         is_italic,
-        is_emoji: emojiRx.test(char),
+        is_emoji: emojiRx.test(char) || !!vectorSymbols[char],
       });
     });
   }
@@ -248,13 +249,17 @@ const printCharacters = (doc, textObject, startY, startX, fontSize, font_type = 
     const is_emoji = row.is_emoji;
 
     if (is_emoji) {
-      const emojiData = emojiImageCache.get(char);
-      if (emojiData) {
-        doc.addImage(emojiData, 'PNG', startX, startY - emojiSize + 2, emojiSize, emojiSize);
+      if (drawVectorSymbol(doc, char, startX, startY, emojiSize)) {
         startX += emojiSize;
       } else {
-        doc.text('**', startX, startY);
-        startX += doc.getTextWidth('**');
+        const emojiData = emojiImageCache.get(char);
+        if (emojiData) {
+          doc.addImage(emojiData, 'PNG', startX, startY - emojiSize + 2, emojiSize, emojiSize);
+          startX += emojiSize;
+        } else {
+          doc.text('**', startX, startY);
+          startX += doc.getTextWidth('**');
+        }
       }
     } else {
       doc.setFont(font_type,
@@ -292,7 +297,7 @@ function split_text_to_size_bi(
   // --- Quick checks ---
   const containsBold = clue.toUpperCase().includes("<B");
   const containsItalic = clue.toUpperCase().includes("<I");
-  const containsEmoji = emojiRx.test(clean_clue);
+  const containsEmoji = emojiRx.test(clean_clue) || Array.from(clean_clue).some(c => !!vectorSymbols[c]);
 
   // --- Fast path: no markup, no emoji, no hyphens
   if (!containsBold && !containsItalic && !containsEmoji && !clean_clue.includes("-") ) {
@@ -308,7 +313,7 @@ function split_text_to_size_bi(
         char,
         is_bold: false,
         is_italic: false,
-        is_emoji: emojiRx.test(char)
+        is_emoji: emojiRx.test(char) || !!vectorSymbols[char]
       }))
     );
     if (has_header) lines = [header_line].concat(lines);
