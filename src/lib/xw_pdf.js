@@ -433,12 +433,7 @@ function draw_crossword_grid(doc, xw, options) {
     bar_width: 2.5
   };
 
-  for (var key in DEFAULT_OPTIONS) {
-    if (!DEFAULT_OPTIONS.hasOwnProperty(key)) continue;
-    if (!options.hasOwnProperty(key)) {
-      options[key] = DEFAULT_OPTIONS[key];
-    }
-  }
+  options = { ...DEFAULT_OPTIONS, ...options };
 
   // If there's an image, draw it and return
   if (xw.metadata.image) {
@@ -917,12 +912,7 @@ async function jscrossword_to_pdf2(xw, options = {}) {
 
   var clue_length = xw.clues.map(x => x.clue).flat().map(x => x.text).join('').length;
 
-  for (var key in DEFAULT_OPTIONS) {
-    if (!DEFAULT_OPTIONS.hasOwnProperty(key)) continue;
-    if (!options.hasOwnProperty(key)) {
-      options[key] = DEFAULT_OPTIONS[key];
-    }
-  }
+  options = { ...DEFAULT_OPTIONS, ...options };
 
   // Sorry big titles but we need a max size here
   const MAX_TITLE_PT = options.max_title_pt;
