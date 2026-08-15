@@ -164,12 +164,8 @@ async function fetchAsDataURL(url, mime = "image/png") {
       reader.onloadend = () => resolve(reader.result); // data: URL
       reader.readAsDataURL(blob);
     });
-  } else if (isNode) {
-    const ab = await resp.arrayBuffer();
-    const b64 = Buffer.from(ab).toString("base64");
-    return `data:${mime};base64,${b64}`;
   } else {
-    // Very defensive fallback
+    // Node.js or fallback environments
     const ab = await resp.arrayBuffer();
     const b64 = Buffer.from(ab).toString("base64");
     return `data:${mime};base64,${b64}`;
