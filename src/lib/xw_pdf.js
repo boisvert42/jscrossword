@@ -1171,39 +1171,53 @@ async function jscrossword_to_pdf2(xw, options = {}) {
 
   /***********************/
 
+/** Helper function to find maximum font size where text fits on one line **/
+function getFittedFontSize(doc, textList, maxWidth, fontType, style, initialPt) {
+  let pt = initialPt;
+  doc.setFont(fontType, style);
+  while (pt > 1) {
+    doc.setFontSize(pt);
+    let fits = true;
+    for (const text of textList) {
+      if (doc.splitTextToSize(text, maxWidth).length > 1) {
+        fits = false;
+        break;
+      }
+    }
+    if (fits) {
+      return pt;
+    }
+    pt -= 1;
+  }
+  return pt;
+}
+
   // If title_pt is null, we determine it
   var DEFAULT_TITLE_PT = MAX_TITLE_PT;
   var total_width = DOC_WIDTH - 2 * margin;
   if (!options.title_pt) {
-    options.title_pt = DEFAULT_TITLE_PT;
-    var finding_title_pt = true;
-    while (finding_title_pt) {
-      var header1_header2 = options.header1 + 'ABCDEFGH' + options.header2;
-      var title_header3 = xw.metadata.title + 'ABCDEFGH' + options.header3;
-      doc.setFontSize(options.title_pt).setFont(options.font_type, 'bold');
-      var lines1 = doc.splitTextToSize(header1_header2, DOC_WIDTH);
-      var lines2 = doc.splitTextToSize(title_header3, DOC_WIDTH);
-      if (lines1.length == 1 && lines2.length == 1) {
-        finding_title_pt = false;
-      } else {
-        options.title_pt -= 1;
-      }
-    }
+    var header1_header2 = options.header1 + 'ABCDEFGH' + options.header2;
+    var title_header3 = xw.metadata.title + 'ABCDEFGH' + options.header3;
+    options.title_pt = getFittedFontSize(
+      doc,
+      [header1_header2, title_header3],
+      DOC_WIDTH,
+      options.font_type,
+      'bold',
+      DEFAULT_TITLE_PT
+    );
   }
   // same for copyright
   if (!options.copyright_pt) {
-    options.copyright_pt = DEFAULT_TITLE_PT;
-    var finding_title_pt = true;
-    while (finding_title_pt) {
-      var author_copyright = xw.metadata.author + 'ABCDEFGH' + xw.metadata.copyright;
-      doc.setFontSize(options.copyright_pt).setFont(options.font_type, 'normal');
-      var lines1 = doc.splitTextToSize(author_copyright, DOC_WIDTH);
-      if (lines1.length == 1) {
-        finding_title_pt = false;
-      } else {
-        options.title_pt -= 1;
-      }
-    }
+    var author_copyright = xw.metadata.author + 'ABCDEFGH' + xw.metadata.copyright;
+    options.copyright_pt = getFittedFontSize(
+      doc,
+      [author_copyright],
+      DOC_WIDTH,
+      options.font_type,
+      'normal',
+      DEFAULT_TITLE_PT
+    );
   }
 
 
