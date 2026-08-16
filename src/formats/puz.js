@@ -468,12 +468,8 @@ export class Puzzle {
     return this.helpers.markup;
   }
 
-  clueNumbering() {
-    if (!this.helpers.clues) this.helpers.clues = new DefaultClueNumbering(this.fill, this.clues, this.width, this.height);
-    return this.helpers.clues;
-  }
-
-  // NOTE: we've removed the toTextFormat() function
+  // NOTE: we've removed the toTextFormat() and clueNumbering() functions
+}
 
 ////////////////////////
 // Rebus & Markup     //
@@ -549,128 +545,9 @@ class Markup {
 
 ////////////////////////
 // Grid & numbering   //
+// Removed for JS     //
 ////////////////////////
 
-export function getGridNumbering(grid, width, height) {
-  const isBlack = (ch) => isBlacksquare(ch);
-  const col = (i) => i % width;
-  const row = (i) => Math.floor(i / width);
-  const lenAcross = (i) => {
-    let c = 0;
-    for (; c < width - col(i); c++)
-      if (isBlack(grid[i + c])) return c;
-    return c;
-  };
-  const lenDown = (i) => {
-    let c = 0;
-    for (; c < height - row(i); c++)
-      if (isBlack(grid[i + c * width])) return c;
-    return c;
-  };
-
-  const a = [],
-    d = [];
-  let clueIndex = 0,
-    num = 1;
-  for (let i = 0; i < grid.length; i++) {
-    if (!isBlack(grid[i])) {
-      const wasClueIndex = clueIndex;
-      const acrossStart = (col(i) === 0) || isBlack(grid[i - 1]);
-      if (acrossStart && lenAcross(i) > 1) {
-        a.push({
-          num,
-          clue: null,
-          clue_index: clueIndex,
-          cell: i,
-          row: row(i),
-          col: col(i),
-          len: lenAcross(i),
-          dir: 'across'
-        });
-        clueIndex++;
-      }
-      const downStart = (row(i) === 0) || isBlack(grid[i - width]);
-      if (downStart && lenDown(i) > 1) {
-        d.push({
-          num,
-          clue: null,
-          clue_index: clueIndex,
-          cell: i,
-          row: row(i),
-          col: col(i),
-          len: lenDown(i),
-          dir: 'down'
-        });
-        clueIndex++;
-      }
-      if (clueIndex > wasClueIndex) num++;
-    }
-  }
-  return [a, d];
-}
-
-export class DefaultClueNumbering {
-  constructor(grid, clues, width, height) {
-    this.grid = grid;
-    this.clues = clues;
-    this.width = width;
-    this.height = height;
-    const [a, d] = getGridNumbering(grid, width, height);
-    this.across = a;
-    this.down = d;
-    for (const e of this.across) e.clue = clues[e.clue_index];
-    for (const e of this.down) e.clue = clues[e.clue_index];
-  }
-}
-
-export class Grid {
-  constructor(gridString, width, height) {
-    this.grid = gridString;
-    this.width = width;
-    this.height = height;
-    if (this.grid.length !== width * height) throw new Error('grid length mismatch');
-  }
-  getCell(row, col) {
-    return this.grid[this.getCellIndex(row, col)];
-  }
-  getCellIndex(row, col) {
-    return row * this.width + col;
-  }
-  getRange(row, col, len, dir = 'across') {
-    return dir === 'across' ? this.getRangeAcross(row, col, len) : this.getRangeDown(row, col, len);
-  }
-  getRangeAcross(row, col, len) {
-    const out = [];
-    for (let i = 0; i < len; i++) out.push(this.grid[this.getCellIndex(row, col + i)]);
-    return out;
-  }
-  getRangeDown(row, col, len) {
-    const out = [];
-    for (let i = 0; i < len; i++) out.push(this.grid[this.getCellIndex(row + i, col)]);
-    return out;
-  }
-  getRangeForClue(clue) {
-    return this.getRange(clue.row, clue.col, clue.len, clue.dir);
-  }
-  getRow(row) {
-    return this.getRangeAcross(row, 0, this.width);
-  }
-  getColumn(col) {
-    return this.getRangeDown(0, col, this.height);
-  }
-  getString(row, col, len, dir = 'across') {
-    return this.getRange(row, col, len, dir).join('');
-  }
-  getStringAcross(row, col, len) {
-    return this.getRangeAcross(row, col, len).join('');
-  }
-  getStringDown(row, col, len) {
-    return this.getRangeDown(row, col, len).join('');
-  }
-  getStringForClue(clue) {
-    return this.getRangeForClue(clue).join('');
-  }
-}
 
 ////////////////////////
 // Scramble helpers   //
