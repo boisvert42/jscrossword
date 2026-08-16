@@ -355,90 +355,11 @@ export class Puzzle {
 
     if (cur.canRead(1)) this.postscript = cur.slice(cur.bytes.length - cur.pos);
 
-    // Don't bother validating checksums
-    /**
-    if (cksum_gbl !== this.globalCksum()) throw new PuzzleFormatError('global checksum does not match');
-    if (cksum_hdr !== this.headerCksum()) throw new PuzzleFormatError('header checksum does not match');
-    //if (cksum_magic !== this.magicCksum()) throw new PuzzleFormatError('magic checksum does not match');
-    for (const [code, expected] of extChecks) {
-      const got = dataCksum(this.extensions.get(code));
-      if (got !== expected) throw new PuzzleFormatError(`extension ${code} checksum does not match`);
-    }
-    **/
+    // NOTE: we don't bother validating checksums
   }
 
   // ----- Saving -----
-
-  tobytes() {
-    // let helpers persist changes
-    if (this.helpers.rebus?.save) this.helpers.rebus.save();
-    if (this.helpers.markup?.save) this.helpers.markup.save();
-
-    const b = new Builder();
-    b.pushBytes(this.preamble);
-
-    // Header (recompute checksums)
-    b.pushU16(this.globalCksum());
-    b.pushBytes(encodeASCII(ACROSSDOWN));
-    b.pushU8(0); // pad to match Python's struct layout pre-header? (equivalent to x before H)
-    b.pushU16(this.headerCksum());
-    b.pushU64(this.magicCksum());
-    b.pushBytes(this.fileversion.subarray(0, 4)); // 4s (without extra \0)
-    b.pushBytes(this.unk1);
-    b.pushU16(this.scrambled_cksum);
-    b.pushBytes(this.unk2);
-    b.pushU8(this.width);
-    b.pushU8(this.height);
-    b.pushU16(this.clues.length);
-    b.pushU16(this.puzzletype);
-    b.pushU16(this.solution_state);
-
-    b.pushBytes(encodeText(this.solution, this.encoding));
-    b.pushBytes(encodeText(this.fill, this.encoding));
-
-    b.pushCString(this.title, this.encoding);
-    b.pushCString(this.author, this.encoding);
-    b.pushCString(this.copyright, this.encoding);
-
-    for (const clue of this.clues) b.pushBytes(encodeText(clue || '', this.encoding)); // no trailing nulls per-field
-    // notes included as zstring for >=1.3 during text cksum, but here we roundtrip as in Python:
-    b.pushCString(this.notes || '', this.encoding);
-
-    // Extensions in recorded order first
-    const ext = new Map(this.extensions);
-    for (const code of this._extensionsOrder) {
-      if (!ext.has(code)) continue;
-      const data = ext.get(code);
-      b.pushBytes(encodeASCII(code));
-      b.pushU16(data.length);
-      b.pushU16(dataCksum(data));
-      b.pushBytes(data);
-      b.pushU8(0);
-      ext.delete(code);
-    }
-    // Any new/unordered
-    for (const [code, data] of ext) {
-      b.pushBytes(encodeASCII(code));
-      b.pushU16(data.length);
-      b.pushU16(dataCksum(data));
-      b.pushBytes(data);
-      b.pushU8(0);
-    }
-
-    // Postscript (bytes). If accidentally a string, encode.
-    if (typeof this.postscript === 'string') {
-      b.pushBytes(encodeText(this.postscript, this.encoding));
-    } else {
-      b.pushBytes(this.postscript || U8([]));
-    }
-
-    return b.toUint8Array();
-  }
-
-  saveToFileSystem(fsWriteFn, filename) {
-    // Optional convenience for Node: fsWriteFn should accept (filename, Uint8Array)
-    fsWriteFn(filename, this.tobytes());
-  }
+  // Removed "save" functions as it would be lossy at best
 
   // ----- Encoding helpers -----
 
@@ -481,8 +402,6 @@ export class Puzzle {
 
   /**
   * Attempt a brute-force unlock
-  * Note that this won't always work as written
-  * TODO: make it always work
   **/
   bruteForceUnlock() {
     if (!this.isSolutionLocked()) return true;
@@ -530,53 +449,7 @@ export class Puzzle {
   }
 
   // ----- Checksums -----
-
-  headerCksum(seed = 0) {
-    // struct HEADER_CKSUM_FORMAT = '<BBH H H ' -> width(B), height(B), numclues(H), puzzletype(H), solution_state(H)
-    const b = new Builder();
-    b.pushU8(this.width);
-    b.pushU8(this.height);
-    b.pushU16(this.clues.length);
-    b.pushU16(this.puzzletype);
-    b.pushU16(this.solution_state);
-    return dataCksum(b.toUint8Array(), seed);
-  }
-
-  textCksum(seed = 0) {
-    let c = seed;
-    if (this.title) c = dataCksum(this.encodeZ(this.title), c);
-    if (this.author) c = dataCksum(this.encodeZ(this.author), c);
-    if (this.copyright) c = dataCksum(this.encodeZ(this.copyright), c);
-    for (const clue of this.clues)
-      if (clue) c = dataCksum(this.encode(clue), c);
-    const vt = this.versionTuple();
-    if ((vt[0] > 1 || (vt[0] === 1 && vt[1] >= 3)) && this.notes) c = dataCksum(this.encodeZ(this.notes), c);
-    return c;
-  }
-
-  globalCksum() {
-    let c = this.headerCksum();
-    c = dataCksum(this.encode(this.solution), c);
-    c = dataCksum(this.encode(this.fill), c);
-    c = this.textCksum(c);
-    return c;
-  }
-
-  magicCksum() {
-    const parts = [
-      this.headerCksum(),
-      dataCksum(this.encode(this.solution)),
-      dataCksum(this.encode(this.fill)),
-      this.textCksum(),
-    ];
-    let magic = 0n;
-    for (let i = parts.length - 1, j = 0; i >= 0; i--, j++) {
-      const c = parts[i];
-      magic = (magic << 8n) | BigInt(MASKSTRING[j].charCodeAt(0) ^ (c & 0xff));
-      magic = magic | (BigInt(MASKSTRING[j + 4].charCodeAt(0) ^ ((c >> 8) & 0xff)) << 32n);
-    }
-    return magic;
-  }
+  // Since we don't write and we don't validate, we have removed these
 
   // ----- Helpers -----
 
@@ -600,37 +473,7 @@ export class Puzzle {
     return this.helpers.clues;
   }
 
-  toTextFormat(textVersion = 'v1') {
-    const TAB = '\t';
-    const lines = [];
-    if (textVersion === 'v1') lines.push('<ACROSS PUZZLE>');
-    else if (textVersion) lines.push(`<ACROSS PUZZLE ${textVersion}>`);
-    else throw new Error('invalid textVersion');
-
-    lines.push('<TITLE>');
-    lines.push(TAB + (this.title || ''));
-    lines.push('<AUTHOR>');
-    lines.push(TAB + (this.author || ''));
-    lines.push('<COPYRIGHT>');
-    lines.push(TAB + (this.copyright || ''));
-    lines.push('<SIZE>');
-    lines.push(TAB + `${this.width}x${this.height}`);
-    lines.push('<GRID>');
-    for (let r = 0; r < this.height; r++) {
-      const row = this.solution.slice(r * this.width, (r + 1) * this.width);
-      lines.push(TAB + row);
-    }
-
-    const numbering = this.clueNumbering();
-    lines.push('<ACROSS>');
-    for (const clue of numbering.across) lines.push(TAB + (clue.clue || ''));
-    lines.push('<DOWN>');
-    for (const clue of numbering.down) lines.push(TAB + (clue.clue || ''));
-    lines.push('<NOTEPAD>');
-    lines.push(this.notes || '');
-    return lines.join('\n');
-  }
-}
+  // NOTE: we've removed the toTextFormat() function
 
 ////////////////////////
 // Rebus & Markup     //
@@ -1005,70 +848,8 @@ function concatBytes(a, b) {
 
 /////////////////////////////
 // Across Lite TXT support //
+// Removed in JS version   //
 /////////////////////////////
-
-export function textFileAsDict(s) {
-  const d = {};
-  let k = null;
-  let v = [];
-  for (const lineRaw of s.split(/\r?\n/)) {
-    const line = lineRaw.trimEnd();
-    if (line.startsWith('<') && line.endsWith('>')) {
-      if (k) d[k] = v.join('\n');
-      k = line.slice(1, -1);
-      v = [];
-    } else {
-      v.push(line);
-    }
-  }
-  if (k) d[k] = v.join('\n');
-  return d;
-}
-
-export function fromTextFormat(s) {
-  const d = textFileAsDict(s);
-  const hasV1 = !!d['ACROSS PUZZLE'];
-  const hasV2 = !!d['ACROSS PUZZLE v2'];
-  if (!hasV1 && !hasV2) throw new PuzzleFormatError('Not a valid Across Lite text puzzle');
-
-  const p = new Puzzle();
-  const acrossClues = [];
-  const downClues = [];
-
-  if (d.TITLE) p.title = d.TITLE;
-  if (d.AUTHOR) p.author = d.AUTHOR;
-  if (d.COPYRIGHT) p.copyright = d.COPYRIGHT;
-
-  if (d.SIZE) {
-    const [w, h] = d.SIZE.split('x').map(x => parseInt(x, 10));
-    p.width = w;
-    p.height = h;
-  }
-  if (d.GRID) {
-    const lines = d.GRID.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-    p.solution = lines.join('');
-  }
-  if (d.ACROSS) acrossClues.push(...d.ACROSS.split(/\r?\n/).map(s => s.trim()).filter(Boolean));
-  if (d.DOWN) downClues.push(...d.DOWN.split(/\r?\n/).map(s => s.trim()).filter(Boolean));
-  if (d.NOTEPAD) p.notes = d.NOTEPAD;
-
-  if (p.solution) {
-    p.fill = p.solution.split('').map(c => (c === BLACKSQUARE ? BLACKSQUARE : BLANKSQUARE)).join('');
-    const [across, down] = getGridNumbering(p.fill, p.width, p.height);
-    p.clues = new Array(across.length + down.length).fill('');
-    for (let i = 0; i < across.length; i++) {
-      const clue = i < acrossClues.length ? acrossClues[i] : '';
-      across[i].clue = clue;
-      p.clues[across[i].clue_index] = clue;
-    }
-    for (let i = 0; i < down.length; i++) {
-      const clue = i < downClues.length ? downClues[i] : '';
-      down[i].clue = clue;
-      p.clues[down[i].clue_index] = clue;
-    }
-  }
-  return p;
-}
 
 // Convenient wrappers mirroring Python API
 export function read(uint8) {
@@ -1077,17 +858,8 @@ export function read(uint8) {
 export function load(uint8) {
   return Puzzle.load(uint8);
 }
-export function readText(str) {
-  return fromTextFormat(str);
-}
-export function loadText(str) {
-  return fromTextFormat(str);
-}
 
 // ==== JSCrossword adapter starts ====
-
-// If not already in scope, import xwGrid from your grid.js
-// import { xwGrid } from "./grid.js";
 
 function jscrossword_from_puz(puzzle, options) {
   const {
