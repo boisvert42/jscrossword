@@ -154,16 +154,19 @@ export function xw_read_jpz(data) {
   if (crossword_type !== "coded") {
     crossword.querySelectorAll("clues").forEach(clues_block => {
       const title = clues_block.querySelector("title")?.textContent.trim() || "";
-      const isFake = clues_block.getAttribute("fake") === "true";
+      const isFake = clues_block.getAttribute("fake") === "true" ||
+                     Boolean(metadata.fakeclues && !metadata.realwords);
       const clueList = Array.from(clues_block.querySelectorAll("clue")).map(clue => {
         let text = clue.innerHTML.trim();
         text = text.replace(/\s+xmlns="[^"]*"/g, "");
         text = unescapeHtmlClue(text);
         const fmt = clue.getAttribute("format");
         if (fmt) text += ` (${fmt})`;
+        const wordAttr = clue.getAttribute("word");
+        const word = isFake ? null : (wordAttr || null);
         return {
           text,
-          word: clue.getAttribute("word"),
+          word,
           number: clue.getAttribute("number"),
         };
       });
